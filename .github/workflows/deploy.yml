@@ -1,0 +1,69 @@
+name: Publish Holden Caulfield Literary Atlas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "holden-caulfield-literary-atlas.zip"
+      - ".github/workflows/deploy.yml"
+      - "scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify and extract uploaded ZIP
+        run: |
+          test -f holden-caulfield-literary-atlas.zip
+          mkdir website
+          unzip -q holden-caulfield-literary-atlas.zip -d website
+          test -f website/package.json
+          test -f website/src/app/page.tsx
+
+      - name: Prepare Next.js for static hosting
+        run: python scripts/prepare_static.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: website
+        run: npm install --no-audit --no-fund
+
+      - name: Build static website
+        working-directory: website
+        run: npm run build
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/out
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
